@@ -16,12 +16,12 @@
 #define STRINGIFY(x) STRINGIFY_(x)
 #include STRINGIFY(MATPLOTLIBCPP_PYTHON_HEADER)
 #else // This should stay the default for backwards compatibility
-#include <python2.7/Python.h>
+#include <python3.5m/Python.h>
 #endif
 
-#if PY_MAJOR_VERSION >= 3
+// #if PY_MAJOR_VERSION >= 3
 #define PyString_FromString PyUnicode_FromString
-#endif
+// #endif
 
 
 namespace matplotlibcpp {
@@ -60,7 +60,7 @@ namespace matplotlibcpp {
 
 			private:
 			_interpreter() {
-                
+
                 // optional but recommended
 #if PY_MAJOR_VERSION >= 3
                 wchar_t name[] = L"plotting";
@@ -144,7 +144,7 @@ namespace matplotlibcpp {
 			}
 		};
 	}
-  
+
 	bool annotate(std::string annotation, double x, double y)
 	{
 		PyObject * xy = PyTuple_New(2);
@@ -160,7 +160,7 @@ namespace matplotlibcpp {
 		PyTuple_SetItem(args, 0, str);
 
 		PyObject* res = PyObject_Call(detail::_interpreter::get().s_python_function_annotate, args, kwargs);
-		
+
 		Py_DECREF(args);
 		Py_DECREF(kwargs);
 
@@ -208,12 +208,12 @@ namespace matplotlibcpp {
 	bool hist(const std::vector<Numeric>& y, long bins=10,std::string color="b", double alpha=1.0)
 	{
 		PyObject* ylist = PyList_New(y.size());
-		
+
 		PyObject* kwargs = PyDict_New();
 		PyDict_SetItemString(kwargs, "bins", PyLong_FromLong(bins));
 		PyDict_SetItemString(kwargs, "color", PyString_FromString(color.c_str()));
 		PyDict_SetItemString(kwargs, "alpha", PyFloat_FromDouble(alpha));
-		
+
 		for(size_t i = 0; i < y.size(); ++i) {
 			PyList_SetItem(ylist, i, PyFloat_FromDouble(y.at(i)));
 		}
@@ -240,9 +240,9 @@ namespace matplotlibcpp {
 		PyObject* kwargs = PyDict_New();
 		PyDict_SetItemString(kwargs, "label", PyString_FromString(label.c_str()));
 		PyDict_SetItemString(kwargs, "bins", PyLong_FromLong(bins));
-		PyDict_SetItemString(kwargs, "color", PyString_FromString(color.c_str()));  
+		PyDict_SetItemString(kwargs, "color", PyString_FromString(color.c_str()));
 		PyDict_SetItemString(kwargs, "alpha", PyFloat_FromDouble(alpha));
-		
+
 		for(size_t i = 0; i < y.size(); ++i) {
 			PyList_SetItem(ylist, i, PyFloat_FromDouble(y.at(i)));
 		}
@@ -258,7 +258,7 @@ namespace matplotlibcpp {
 
 		return res;
 	}
-	
+
 	template<typename NumericX, typename NumericY>
 	bool plot(const std::vector<NumericX>& x, const std::vector<NumericY>& y, const std::string& s = "")
 	{
@@ -438,8 +438,8 @@ namespace matplotlibcpp {
 		Py_DECREF(args);
 		Py_DECREF(res);
 	}
-  
-  
+
+
 	inline double* xlim()
 	{
 		PyObject* args = PyTuple_New(0);
@@ -450,14 +450,14 @@ namespace matplotlibcpp {
 		double* arr = new double[2];
 		arr[0] = PyFloat_AsDouble(left);
 		arr[1] = PyFloat_AsDouble(right);
-    
+
 		if(!res) throw std::runtime_error("Call to xlim() failed.");
 
 		Py_DECREF(res);
 		return arr;
 	}
-  
-  
+
+
 	inline double* ylim()
 	{
 		PyObject* args = PyTuple_New(0);
@@ -468,8 +468,8 @@ namespace matplotlibcpp {
 		double* arr = new double[2];
 		arr[0] = PyFloat_AsDouble(left);
 		arr[1] = PyFloat_AsDouble(right);
-    
-		if(!res) throw std::runtime_error("Call to ylim() failed."); 
+
+		if(!res) throw std::runtime_error("Call to ylim() failed.");
 
 		Py_DECREF(res);
 		return arr;

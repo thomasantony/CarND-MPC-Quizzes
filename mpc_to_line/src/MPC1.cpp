@@ -10,9 +10,7 @@ namespace plt = matplotlibcpp;
 
 using CppAD::AD;
 
-// We set the number of timesteps to 25
-// and the timestep evaluation frequency or evaluation
-// period to 0.05.
+// TODO: Set N and dt
 size_t N = 25;
 double dt = 0.05;
 
@@ -28,10 +26,10 @@ double dt = 0.05;
 // This is the length from front to CoG that has a similar radius.
 const double Lf = 2.67;
 
-// Both the reference cross track and orientation errors are 0.
-// The reference velocity is set to 40 mph.
 double ref_cte = 0;
 double ref_epsi = 0;
+// NOTE: feel free to play around with this
+// or do something completely different
 double ref_v = 40;
 
 // The solver takes all the state variables and actuator
@@ -60,17 +58,21 @@ class FG_eval {
     // Any additions to the cost should be added to `fg[0]`.
     fg[0] = 0;
 
-    // The part of the cost based on the reference state.
-    for (int i = 0; i < N; i++) {
-      fg[0] += CppAD::pow(vars[cte_start + i] - ref_cte, 2);
-      fg[0] += CppAD::pow(vars[epsi_start + i] - ref_epsi, 2);
-      fg[0] += CppAD::pow(vars[v_start + i] - ref_v, 2);
+    // Reference State Cost
+    // TODO: Define the cost related the reference state and
+    // any anything you think may be beneficial.
+    // Cost contains CTE, heading error and velocity error
+    for(int i=0; i<N; i++)
+    {
+        fg[0] += CppAD::pow(vars[cte_start+i] - ref_cte, 2);
+        fg[0] += CppAD::pow(vars[epsi_start+i] - ref_epsi, 2);
+        fg[0] += CppAD::pow(vars[v_start+i] - ref_v, 2);
     }
-
-    // Minimize the use of actuators.
-    for (int i = 0; i < N - 1; i++) {
-      fg[0] += CppAD::pow(vars[delta_start + i], 2);
-      fg[0] += CppAD::pow(vars[a_start + i], 2);
+    // Ignore first element as we are going to be using that as the output??
+    for(int i=0; i<N-1; i++)
+    {
+        fg[0] += CppAD::pow(vars[delta_start + i], 2);
+        fg[0] += CppAD::pow(vars[a_start + i], 2);
     }
 
     // Minimize the value gap between sequential actuations.
@@ -98,10 +100,10 @@ class FG_eval {
 
     // The rest of the constraints
     for (int i = 0; i < N - 1; i++) {
-      // The state at time t+1 .
+      // At time t+1
       AD<double> x1 = vars[x_start + i + 1];
       AD<double> y1 = vars[y_start + i + 1];
-      AD<double> psi1 = vars[psi_start + i + 1];
+      AD<double> psi1 = vars[x_start + i + 1];
       AD<double> v1 = vars[v_start + i + 1];
       AD<double> cte1 = vars[cte_start + i + 1];
       AD<double> epsi1 = vars[epsi_start + i + 1];
@@ -118,19 +120,18 @@ class FG_eval {
       AD<double> delta0 = vars[delta_start + i];
       AD<double> a0 = vars[a_start + i];
 
+      // Use waypoint information
       AD<double> f0 = coeffs[0] + coeffs[1] * x0;
       AD<double> psides0 = CppAD::atan(coeffs[1]);
 
       // Here's `x` to get you started.
       // The idea here is to constraint this value to be 0.
       //
-      // Recall the equations for the model:
-      // x_[t+1] = x[t] + v[t] * cos(psi[t]) * dt
-      // y_[t+1] = y[t] + v[t] * sin(psi[t]) * dt
-      // psi_[t+1] = psi[t] + v[t] / Lf * delta[t] * dt
-      // v_[t+1] = v[t] + a[t] * dt
-      // cte[t+1] = f(x[t]) - y[t] + v[t] * sin(epsi[t]) * dt
-      // epsi[t+1] = psi[t] - psides[t] + v[t] * delta[t] / Lf * dt
+      // NOTE: The use of `AD<double>` and use of `CppAD`!
+      // This is also CppAD can compute derivatives and pass
+      // these to the solver.
+
+      // TODO: Setup the rest of the model constraints
       fg[2 + x_start + i] = x1 - (x0 + v0 * CppAD::cos(psi0) * dt);
       fg[2 + y_start + i] = y1 - (y0 + v0 * CppAD::sin(psi0) * dt);
       fg[2 + psi_start + i] = psi1 - (psi0 + v0 * delta0 / Lf * dt);
@@ -151,7 +152,7 @@ MPC::MPC() {}
 MPC::~MPC() {}
 
 vector<double> MPC::Solve(Eigen::VectorXd x0, Eigen::VectorXd coeffs) {
-  size_t i;
+  // size_t i;
   typedef CPPAD_TESTVECTOR(double) Dvector;
 
   double x = x0[0];
@@ -253,6 +254,7 @@ vector<double> MPC::Solve(Eigen::VectorXd x0, Eigen::VectorXd coeffs) {
   //
   bool ok = true;
   ok &= solution.status == CppAD::ipopt::solve_result<Dvector>::success;
+  std::cout << solution.status << std::endl;
 
   auto cost = solution.obj_value;
   std::cout << "Cost " << cost << std::endl;
@@ -308,8 +310,7 @@ int main() {
   ptsx << -100, 100;
   ptsy << -1, -1;
 
-  // The polynomial is fitted to a straight line so a polynomial with
-  // order 1 is sufficient.
+  // TODO: fit a polynomial to the above x and y coordinates
   auto coeffs = polyfit(ptsx, ptsy, 1);
 
   // NOTE: free feel to play around with these
@@ -317,11 +318,9 @@ int main() {
   double y = 10;
   double psi = 0;
   double v = 10;
-  // The cross track error is calculated by evaluating at polynomial at x, f(x)
-  // and subtracting y.
+  // TODO: calculate the cross track error
   double cte = polyeval(coeffs, 0) - y;
-  // Due to the sign starting at 0, the orientation error is -f'(x).
-  // derivative of coeffs[0] + coeffs[1] * x -> coeffs[1]
+  // TODO: calculate the orientation error
   double epsi = -atan(coeffs[1]);
 
   Eigen::VectorXd state(6);
@@ -352,7 +351,6 @@ int main() {
     a_vals.push_back(vars[7]);
 
     state << vars[0], vars[1], vars[2], vars[3], vars[4], vars[5];
-    std::cout << state << std::endl;
   }
 
   // Plot values

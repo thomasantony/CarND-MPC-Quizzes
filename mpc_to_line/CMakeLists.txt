@@ -13,14 +13,6 @@ set(CMAKE_CXX_FLAGS, "${CXX_FLAGS}")
 
 set(sources src/MPC.cpp)
 
-set(PYTHON_LIBRARY "/Users/tantony/anaconda/lib/libpython3.5m.dylib")
-set(PYTHON_LIBRARY ${PYTHON_LIBRARY} CACHE FILEPATH "" FORCE)
-set(PYTHON_INCLUDE_DIR "/Users/tantony/anaconda/include/python3.5m/")
-set(PYTHON_INCLUDE_DIR ${PYTHON_INCLUDE_DIR} CACHE FILEPATH "" FORCE)
-find_package(PythonLibs REQUIRED)
-
-INCLUDE_DIRECTORIES(${PYTHON_INCLUDE_DIRS})
-
 include_directories(src/Eigen-3.3)
 include_directories(/usr/local/include)
 include_directories(/Users/tantony/anaconda/include/python3.5m)

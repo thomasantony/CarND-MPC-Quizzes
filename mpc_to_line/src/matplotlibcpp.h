@@ -16,12 +16,12 @@
 #define STRINGIFY(x) STRINGIFY_(x)
 #include STRINGIFY(MATPLOTLIBCPP_PYTHON_HEADER)
 #else // This should stay the default for backwards compatibility
-#include <python3.5m/Python.h>
+#include <python2.7/Python.h>
 #endif
 
-// #if PY_MAJOR_VERSION >= 3
+#if PY_MAJOR_VERSION >= 3
 #define PyString_FromString PyUnicode_FromString
-// #endif
+#endif
 
 
 namespace matplotlibcpp {

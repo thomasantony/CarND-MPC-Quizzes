@@ -63,6 +63,20 @@ double polyeval_slope(Eigen::VectorXd coeffs, double x) {
   return result;
 }
 
+tuple<vector<double>, vector<double>>
+transform_points(vector<double> ptsx, vector<double> ptsy, vector<double> vehicle) {
+  auto out_x = vector<double>(ptsx.size());
+  auto out_y = vector<double>(ptsy.size());
+  double x, y;
+  for(auto i=0; i < ptsx.size(); i++)
+  {
+    std::tie(x, y) = local_transform(std::make_tuple(ptsx[i], ptsy[i]), vehicle);
+    out_x.push_back(x);
+    out_y.push_back(y);
+  }
+  return std::make_tuple(out_x, out_y);
+}
+
 
 class FG_eval {
  public:
@@ -299,27 +313,31 @@ vector<double> MPC::Solve(Eigen::VectorXd x0, Eigen::VectorXd coeffs) {
 // Fit a polynomial.
 // Adapted from
 // https://github.com/JuliaMath/Polynomials.jl/blob/master/src/Polynomials.jl#L676-L716
-Eigen::VectorXd polyfit(Eigen::VectorXd xvals, Eigen::VectorXd yvals,
-                        int order) {
+// Eigen::VectorXd polyfit(Eigen::VectorXd& xvals, Eigen::VectorXd& yvals,
+//                         int order)
+Eigen::VectorXd polyfit(vector<double> xvals, vector<double> yvals,
+                        int order){
   assert(xvals.size() == yvals.size());
   assert(order >= 1 && order <= xvals.size() - 1);
   Eigen::MatrixXd A(xvals.size(), order + 1);
 
+  // Convert to Eigen format for math
+  Eigen::VectorXd yvals_ = Eigen::VectorXd::Map(yvals.data(), yvals.size());
+  cout <<yvals_<<endl;
   for (int i = 0; i < xvals.size(); i++) {
     A(i, 0) = 1.0;
   }
 
   for (int j = 0; j < xvals.size(); j++) {
     for (int i = 0; i < order; i++) {
-      A(j, i + 1) = A(j, i) * xvals(j);
+      A(j, i + 1) = A(j, i) * xvals[j];
     }
   }
 
   auto Q = A.householderQr();
-  auto result = Q.solve(yvals);
+  auto result = Q.solve(yvals_);
   return result;
 }
-
 /*
 2["telemetry",{"ptsx":[-32.16173,-43.49173,-61.09,-78.29172,-93.05002,-107.7717],
 "ptsy":[113.361,105.941,92.88499,78.73102,65.34102,50.57938],
@@ -337,33 +355,43 @@ int main() {
   MPC mpc;
   int iters = 50;
 // 8.62, 4.63
-
-  // Eigen::VectorXd ptsx(2);
-  // Eigen::VectorXd ptsy(2);
-  // ptsx << -100, 100;
-  // ptsy << -1, -1;
-  Eigen::VectorXd ptsx(6);
-  Eigen::VectorXd ptsy(6);
-  ptsx << -9.60304, 3.9394, 25.8285, 48.0013, 67.7202, 88.1742;
-  ptsy << 0.877534, 0.711668, 1.72439, 3.8695, 6.74427, 10.7777;
-
-  // The polynomial is fitted to a straight line so a polynomial with
-  // order 1 is sufficient.
-  auto coeffs = polyfit(ptsx, ptsy, 3);
-
+/* 42["telemetry",{"ptsx":[-32.16173,-43.49173,-61.09,-78.29172,-93.05002,-107.7717],
+"ptsy":[113.361,105.941,92.88499,78.73102,65.34102,50.57938],
+"psi_unity":4.12033,
+"psi":3.733651,"x":-40.62,"y":108.73,"steering_angle":0,"throttle":0,"speed":0}]
+*/
   // // NOTE: free feel to play around with these
   // double x = -1;
   // double y = 10;
   // double psi = 0;
   // double v = 25*0.45;
 
-  // double x = -40.62;
-  // double y = 108.73;
-  // double psi = 3.733651;
-  double x = 0;
-  double y = 0;
-  double psi = 0;
+  double px = -40.62;
+  double py = 108.73;
+  double psi = 3.733651;
+  // double px = 0;
+  // double py = 0;
+  // double psi = 0;
   double v = 0*0.45;
+
+  // Eigen::VectorXd ptsx(6);
+  // Eigen::VectorXd ptsy(6);
+  // ptsx << -100, 100;
+  // ptsy << -1, -1;
+  vector<double> ptsx = {-24.01645,-32.16173,-43.49173,-61.09,-78.29172,-93.05002};
+  vector<double> ptsy = {119.021,113.361,105.941,92.88499,78.73102,65.34102};
+  // ptsx << -9.60304, 3.9394, 25.8285, 48.0013, 67.7202, 88.1742;
+  // ptsy << 0.877534, 0.711668, 1.72439, 3.8695, 6.74427, 10.7777;
+  // vector<double> ptsx = {-9.60304, 3.9394, 25.8285, 48.0013, 67.7202, 88.1742};
+  // vector<double> ptsy = {0.877534, 0.711668, 1.72439, 3.8695, 6.74427, 10.7777};
+  // The polynomial is fitted to a straight line so a polynomial with
+  // order 1 is sufficient.
+  vector<double> ptsx_rel, ptsy_rel;
+  std::tie(ptsx_rel, ptsy_rel) = transform_points(ptsx, ptsy, {px, py, psi});
+
+  auto coeffs = polyfit(ptsx_rel, ptsy_rel, 3);
+  // auto coeffs = polyfit(ptsx, ptsy, 3);
+
 
   // The cross track error is calculated by evaluating at polynomial at x, f(x)
   // and subtracting y.
@@ -376,7 +404,7 @@ int main() {
   double epsi = -atan(polyeval_slope(coeffs, 0.0));
 
   Eigen::VectorXd state(6);
-  state << x, y, psi, v, cte, epsi;
+  state << 0, 0, 0, v, cte, epsi;
 
   std::vector<double> x_vals = {state[0]};
   std::vector<double> y_vals = {state[1]};
@@ -403,7 +431,7 @@ int main() {
     a_vals.push_back(vars[7]);
 
     state << vars[0], vars[1], vars[2], vars[3], vars[4], vars[5];
-    std::cout << state << std::endl;
+    // std::cout << state << std::endl;
   }
 
   // Plot values

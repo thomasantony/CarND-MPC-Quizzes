@@ -13,8 +13,8 @@ using CppAD::AD;
 // We set the number of timesteps to 25
 // and the timestep evaluation frequency or evaluation
 // period to 0.05.
-size_t N = 50;
-double dt = 0.1;
+size_t N = 25;
+double dt = 0.05;
 
 // This value assumes the model presented in the classroom is used.
 //
@@ -32,7 +32,7 @@ const double Lf = 2.67;
 // The reference velocity is set to 40 mph.
 double ref_cte = 0;
 double ref_epsi = 0;
-double ref_v = 40;
+double ref_v = 40*.45;
 
 // The solver takes all the state variables and actuator
 // variables in a singular vector. Thus, we should to establish
@@ -45,6 +45,24 @@ size_t cte_start = v_start + N;
 size_t epsi_start = cte_start + N;
 size_t delta_start = epsi_start + N;
 size_t a_start = delta_start + N - 1;
+
+double polyeval(Eigen::VectorXd coeffs, double x) {
+  double result = 0.0;
+  for (int i = 0; i < coeffs.size(); i++) {
+    result += coeffs[i] * pow(x, i);
+  }
+  return result;
+}
+
+// Evaluate a polynomial slope.
+double polyeval_slope(Eigen::VectorXd coeffs, double x) {
+  double result = 0.0;
+  for (int i = 1; i < coeffs.size(); i++) {
+    result += coeffs[i] * pow(x, i-1);
+  }
+  return result;
+}
+
 
 class FG_eval {
  public:
@@ -65,6 +83,7 @@ class FG_eval {
       fg[0] += CppAD::pow(vars[cte_start + i] - ref_cte, 2);
       fg[0] += CppAD::pow(vars[epsi_start + i] - ref_epsi, 2);
       fg[0] += CppAD::pow(vars[v_start + i] - ref_v, 2);
+      // cout<<"Vel error : "<<vars[v_start + i] - ref_v<<endl;
     }
 
     // Minimize the use of actuators.
@@ -96,6 +115,11 @@ class FG_eval {
     fg[1 + cte_start] = vars[cte_start];
     fg[1 + epsi_start] = vars[epsi_start];
 
+    // // Used to find relative coordinates for cte
+    // ADvector vehicle(3);
+    // vehicle.push_back(vars[x_start]);
+    // vehicle.push_back(vars[y_start]);
+    // vehicle.push_back(vars[psi_start]);
     // The rest of the constraints
     for (int i = 0; i < N - 1; i++) {
       // The state at time t+1 .
@@ -118,8 +142,14 @@ class FG_eval {
       AD<double> delta0 = vars[delta_start + i];
       AD<double> a0 = vars[a_start + i];
 
-      AD<double> f0 = coeffs[0] + coeffs[1] * x0;
-      AD<double> psides0 = CppAD::atan(coeffs[1]);
+      // AD<double> rel_x0, rel_y0, rel_x1, rel_y1;
+      // std::tie(rel_x0, rel_y0) = local_transform<AD<double>, ADvector>(make_tuple(x0, y0), vehicle);
+      // std::tie(rel_x1, rel_y1) = local_transform<AD<double>, ADvector>(make_tuple(x1, y1), vehicle);
+
+      // AD<double> f0 = coeffs[0] + coeffs[1] * rel_x0;
+      // AD<double> psides0 = CppAD::atan(coeffs[1]);
+      AD<double> f0 = polyeval_cppad(coeffs, x0);
+      AD<double> psides0 = CppAD::atan(polyeval_slope_cppad(coeffs, x0));
 
       // Here's `x` to get you started.
       // The idea here is to constraint this value to be 0.
@@ -266,15 +296,6 @@ vector<double> MPC::Solve(Eigen::VectorXd x0, Eigen::VectorXd coeffs) {
 // Helper functions to fit and evaluate polynomials.
 //
 
-// Evaluate a polynomial.
-double polyeval(Eigen::VectorXd coeffs, double x) {
-  double result = 0.0;
-  for (int i = 0; i < coeffs.size(); i++) {
-    result += coeffs[i] * pow(x, i);
-  }
-  return result;
-}
-
 // Fit a polynomial.
 // Adapted from
 // https://github.com/JuliaMath/Polynomials.jl/blob/master/src/Polynomials.jl#L676-L716
@@ -299,30 +320,60 @@ Eigen::VectorXd polyfit(Eigen::VectorXd xvals, Eigen::VectorXd yvals,
   return result;
 }
 
+/*
+2["telemetry",{"ptsx":[-32.16173,-43.49173,-61.09,-78.29172,-93.05002,-107.7717],
+"ptsy":[113.361,105.941,92.88499,78.73102,65.34102,50.57938],
+"psi_unity":4.12033,"psi":3.733651,"x":-40.62,"y":108.73,
+"steering_angle":0,"throttle":0,"speed":0}]
+
+
+ptsx -9.60304, 3.9394, 25.8285, 48.0013, 67.7202, 88.1742
+ptsy 0.877534, 0.711668, 1.72439, 3.8695, 6.74427, 10.7777
+coeffs : 0.744287 0.00214534 0.00135139
+*/
+
+
 int main() {
   MPC mpc;
   int iters = 50;
+// 8.62, 4.63
 
-  Eigen::VectorXd ptsx(2);
-  Eigen::VectorXd ptsy(2);
-  ptsx << -100, 100;
-  ptsy << -1, -1;
+  // Eigen::VectorXd ptsx(2);
+  // Eigen::VectorXd ptsy(2);
+  // ptsx << -100, 100;
+  // ptsy << -1, -1;
+  Eigen::VectorXd ptsx(6);
+  Eigen::VectorXd ptsy(6);
+  ptsx << -9.60304, 3.9394, 25.8285, 48.0013, 67.7202, 88.1742;
+  ptsy << 0.877534, 0.711668, 1.72439, 3.8695, 6.74427, 10.7777;
 
   // The polynomial is fitted to a straight line so a polynomial with
   // order 1 is sufficient.
-  auto coeffs = polyfit(ptsx, ptsy, 1);
+  auto coeffs = polyfit(ptsx, ptsy, 3);
 
-  // NOTE: free feel to play around with these
-  double x = -1;
-  double y = 10;
+  // // NOTE: free feel to play around with these
+  // double x = -1;
+  // double y = 10;
+  // double psi = 0;
+  // double v = 25*0.45;
+
+  // double x = -40.62;
+  // double y = 108.73;
+  // double psi = 3.733651;
+  double x = 0;
+  double y = 0;
   double psi = 0;
-  double v = 10;
+  double v = 0*0.45;
+
   // The cross track error is calculated by evaluating at polynomial at x, f(x)
   // and subtracting y.
-  double cte = polyeval(coeffs, 0) - y;
-  // Due to the sign starting at 0, the orientation error is -f'(x).
-  // derivative of coeffs[0] + coeffs[1] * x -> coeffs[1]
-  double epsi = -atan(coeffs[1]);
+  // double cte = polyeval(coeffs, 0) - y;
+  // // Due to the sign starting at 0, the orientation error is -f'(x).
+  // // derivative of coeffs[0] + coeffs[1] * x -> coeffs[1]
+  // double epsi = -atan(coeffs[1]);
+
+  double cte = polyeval(coeffs, 0.0);
+  double epsi = -atan(polyeval_slope(coeffs, 0.0));
 
   Eigen::VectorXd state(6);
   state << x, y, psi, v, cte, epsi;
@@ -358,15 +409,19 @@ int main() {
   // Plot values
   // NOTE: feel free to play around with this.
   // It's useful for debugging!
-  plt::subplot(3, 1, 1);
+  plt::subplot(2, 2, 1);
   plt::title("CTE");
   plt::plot(cte_vals);
-  plt::subplot(3, 1, 2);
-  plt::title("Delta (Radians)");
-  plt::plot(delta_vals);
-  plt::subplot(3, 1, 3);
+  plt::subplot(2, 2, 2);
   plt::title("Velocity");
   plt::plot(v_vals);
+
+  plt::subplot(2, 2, 3);
+  plt::title("Delta (Radians)");
+  plt::plot(delta_vals);
+  plt::subplot(2, 2, 4);
+  plt::title("Acceleration (m/s^2)");
+  plt::plot(a_vals);
 
   plt::show();
 }

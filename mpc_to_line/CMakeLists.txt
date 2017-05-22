@@ -1,5 +1,5 @@
 project(mpc)
-
+# export PYTHONHOME=/Users/tantony/anaconda
 cmake_minimum_required (VERSION 3.5)
 
 # -g allows for gdb debugging
